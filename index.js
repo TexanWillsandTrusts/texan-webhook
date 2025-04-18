@@ -8,7 +8,7 @@ app.use(bodyParser.json());
 const VERIFY_TOKEN = 'texanverify123';
 const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 
-// GET /webhook for verification
+// GET /webhook for Meta verification
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -33,4 +33,27 @@ app.post('/webhook', async (req, res) => {
       if (!event || !event.message || !event.sender) continue;
 
       const senderId = event.sender.id;
-      const message
+      const messageText = event.message.text;
+
+      if (messageText) {
+        const replyText = "Hi there 👋 I'm Tex! Do you have a Will or Trust yet?";
+
+        try {
+          await axios.post(`https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, {
+            recipient: { id: senderId },
+            message: { text: replyText }
+          });
+        } catch (err) {
+          console.error('Error sending message:', err?.response?.data || err.message);
+        }
+      }
+    }
+
+    res.status(200).send('EVENT_RECEIVED');
+  } else {
+    res.sendStatus(404);
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Texan Webhook running on port ${PORT}`));
