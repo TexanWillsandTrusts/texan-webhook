@@ -77,3 +77,9 @@ app.post('/webhook', async (req, res) => {
 
     res.status(200).send('EVENT_RECEIVED');
   } else {
+    res.sendStatus(404);
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 Texan Webhook running on port ${PORT}`));
