@@ -30,18 +30,14 @@ app.post('/webhook', async (req, res) => {
       const messageText = event.message?.text;
 
       if (messageText) {
-        const aiResponse = await axios.post('https://YOUR-TEX-ENDPOINT.com/message', {
-          message: messageText,
-          sender: senderId
-        });
+  const replyText = "Hi there 👋 I'm Tex! Do you have a Will or Trust yet?";
 
-        const replyText = aiResponse.data.reply;
+  await axios.post(`https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, {
+    recipient: { id: senderId },
+    message: { text: replyText }
+  });
+}
 
-        await axios.post(`https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, {
-          recipient: { id: senderId },
-          message: { text: replyText }
-        });
-      }
     }
     res.status(200).send('EVENT_RECEIVED');
   } else {
