@@ -43,3 +43,37 @@ app.post('/webhook', async (req, res) => {
             'https://texanwillsandtrusts.com/wp-json/mwai-engine/v1/chat',
             {
               prompt: messageText
+            },
+            {
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer TexWebhook2024'
+              }
+            }
+          );
+
+          const replyText = aiResponse.data?.text || "Sorry, I didn't catch that.";
+
+          await axios.post(
+            `https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+            {
+              recipient: { id: senderId },
+              message: { text: replyText }
+            }
+          );
+        } catch (err) {
+          console.error('Error processing message:', err?.response?.data || err.message);
+
+          await axios.post(
+            `https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+            {
+              recipient: { id: senderId },
+              message: { text: "Sorry, I had trouble processing that. Try again in a moment." }
+            }
+          );
+        }
+      }
+    }
+
+    res.status(200).send('EVENT_RECEIVED');
+  } else {
