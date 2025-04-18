@@ -6,9 +6,9 @@ const app = express();
 app.use(bodyParser.json());
 
 const VERIFY_TOKEN = 'texanverify123';
-const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN; // Securely loaded from Render environment
+const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
 
-// Webhook verification endpoint
+// GET /webhook for verification
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -22,5 +22,15 @@ app.get('/webhook', (req, res) => {
   }
 });
 
-// Main webhook POST handler
-app.post('/webhook', async (req, res) =>
+// POST /webhook to receive messages
+app.post('/webhook', async (req, res) => {
+  const body = req.body;
+
+  if (body.object === 'page') {
+    for (const entry of body.entry) {
+      const event = entry.messaging?.[0];
+
+      if (!event || !event.message || !event.sender) continue;
+
+      const senderId = event.sender.id;
+      const message
