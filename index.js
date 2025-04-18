@@ -40,9 +40,9 @@ app.post('/webhook', async (req, res) => {
 
         try {
           const aiResponse = await axios.post(
-            'https://texanwillsandtrusts.com/wp-json/mwai-engine/v1/chat',
+            'https://texanwillsandtrusts.com/wp-json/mwai-ui/v1/chats/submit',
             {
-              prompt: messageText
+              message: messageText
             },
             {
               headers: {
