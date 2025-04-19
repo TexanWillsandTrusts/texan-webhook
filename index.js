@@ -38,7 +38,6 @@ app.post('/webhook', async (req, res) => {
   if (body.object === 'page') {
     for (const entry of body.entry) {
       const webhook_event = entry.messaging[0];
-
       const sender_psid = webhook_event.sender.id;
       const message_text = webhook_event.message?.text;
 
@@ -60,11 +59,11 @@ app.post('/webhook', async (req, res) => {
             await callSendAPI(sender_psid, data.text);
           } else {
             console.error('⚠️ No text in AI response:', data);
-            await callSendAPI(sender_psid, "Sorry, I had trouble answering that. Want to try asking another way?");
+            await callSendAPI(sender_psid, "Hmm, I didn't quite catch that. Want to try asking another way?");
           }
         } catch (error) {
           console.error('❌ Error processing message:', error);
-          await callSendAPI(sender_psid, "Sorry, something went wrong. Please try again later.");
+          await callSendAPI(sender_psid, "Sorry, I had trouble answering that one. Try again in a bit!");
         }
       }
     }
