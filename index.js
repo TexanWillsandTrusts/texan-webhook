@@ -8,9 +8,8 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Replace with your real Page Access Token
-const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
-// Replace with your real Bearer Token for public API access
+// WordPress AI Engine API endpoint and bearer token
+const AI_ENDPOINT = 'https://texanwillsandtrusts.com/wp-json/mwai-ui/v1/chats/submit';
 const BEARER_TOKEN = 'TexWebhook2024';
 
 app.use(bodyParser.json());
@@ -35,7 +34,7 @@ app.get('/webhook', (req, res) => {
   }
 });
 
-// 📥 Message Received (POST)
+// 📥 Handle Incoming Messages (POST)
 app.post('/webhook', async (req, res) => {
   const body = req.body;
 
@@ -58,10 +57,18 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-// 🤖 Handle Incoming Message and Call AI
+// 🔁 Determine Platform from Sender ID (rough heuristic)
+function getAccessToken(senderId) {
+  // Instagram sender IDs are longer
+  return senderId.length > 15
+    ? process.env.IG_PAGE_ACCESS_TOKEN
+    : process.env.FB_PAGE_ACCESS_TOKEN;
+}
+
+// 🤖 Send Message to AI Engine and Respond
 async function handleMessage(senderId, userMessage) {
   try {
-    const response = await fetch('https://texanwillsandtrusts.com/wp-json/mwai-ui/v1/chats/submit', {
+    const response = await fetch(AI_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -78,19 +85,21 @@ async function handleMessage(senderId, userMessage) {
     if (data?.text) {
       await sendMessage(senderId, data.text);
     } else {
-      console.error('Error: Invalid AI response', data);
-      await sendMessage(senderId, 'Sorry, I had trouble understanding that. Can you ask it a different way?');
+      console.error('❌ Invalid AI response:', data);
+      await sendMessage(senderId, 'Lo siento, no entendí eso. ¿Podrías intentarlo de otra manera?');
     }
   } catch (error) {
-    console.error('Error processing message:', error);
+    console.error('❌ Error during AI request:', error);
+    await sendMessage(senderId, 'Oops, hubo un error al procesar tu mensaje.');
   }
 }
 
-// 📤 Send Message Back to User
+// 📤 Send Reply to Messenger or Instagram
 async function sendMessage(senderId, replyText) {
-  try {
-    const url = `https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`;
+  const accessToken = getAccessToken(senderId);
+  const url = `https://graph.facebook.com/v18.0/me/messages?access_token=${accessToken}`;
 
+  try {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -101,12 +110,11 @@ async function sendMessage(senderId, replyText) {
     });
 
     const data = await response.json();
-
     if (data.error) {
-      console.error('Error sending message:', data);
+      console.error('❌ Error sending message:', data);
     }
   } catch (error) {
-    console.error('Error sending message:', error);
+    console.error('❌ Error posting to Graph API:', error);
   }
 }
 
