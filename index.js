@@ -6,102 +6,110 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
+const PORT = process.env.PORT || 10000;
+
+// Replace with your real Page Access Token
+const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
+// Replace with your real Bearer Token for public API access
+const BEARER_TOKEN = 'TexWebhook2024';
+
 app.use(bodyParser.json());
 
-const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN || 'YOUR_PAGE_ACCESS_TOKEN';
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN || 'TexWebhook2024';
-
-// Root route for testing
-app.get('/', (req, res) => {
-  res.send('🚀 Texan Webhook running');
-});
-
-// Facebook Webhook Verification
+// 🔐 Webhook Verification (GET)
 app.get('/webhook', (req, res) => {
+  const VERIFY_TOKEN = 'texanverify123';
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    console.log('✅ Webhook verified');
-    res.status(200).send(challenge);
+  if (mode && token) {
+    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+      console.log('✅ Webhook verified with Meta');
+      res.status(200).send(challenge);
+    } else {
+      console.warn('❌ Webhook verification failed');
+      res.sendStatus(403);
+    }
   } else {
-    console.log('❌ Webhook verification failed');
-    res.sendStatus(403);
+    res.sendStatus(400);
   }
 });
 
-// Message handler
+// 📥 Message Received (POST)
 app.post('/webhook', async (req, res) => {
   const body = req.body;
 
   if (body.object === 'page') {
     for (const entry of body.entry) {
-      const webhook_event = entry.messaging[0];
-      const sender_psid = webhook_event.sender.id;
-      const message_text = webhook_event.message?.text;
+      const event = entry.messaging?.[0] || entry.standby?.[0];
+      if (!event) continue;
 
-      if (sender_psid && message_text) {
-        console.log(`📨 Tex received: "${message_text}" from ${sender_psid}`);
+      const senderId = event.sender.id;
+      const messageText = event.message?.text;
 
-        try {
-          const aiResponse = await fetch('https://texanwillsandtrusts.com/wp-json/tex-chat/v1/send', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ message: message_text })
-          });
-
-          const data = await aiResponse.json();
-
-          if (data?.text) {
-            await callSendAPI(sender_psid, data.text);
-          } else {
-            console.error('⚠️ No text in AI response:', data);
-            await callSendAPI(sender_psid, "Hmm, I didn't quite catch that. Want to try asking another way?");
-          }
-        } catch (error) {
-          console.error('❌ Error processing message:', error);
-          await callSendAPI(sender_psid, "Sorry, I had trouble answering that one. Try again in a bit!");
-        }
+      if (messageText) {
+        console.log(`📨 Tex received: "${messageText}" from ${senderId}`);
+        await handleMessage(senderId, messageText);
       }
     }
-
     res.status(200).send('EVENT_RECEIVED');
   } else {
     res.sendStatus(404);
   }
 });
 
-// Send message to Facebook Messenger user
-async function callSendAPI(sender_psid, response) {
-  const request_body = {
-    recipient: { id: sender_psid },
-    message: { text: response }
-  };
-
+// 🤖 Handle Incoming Message and Call AI
+async function handleMessage(senderId, userMessage) {
   try {
-    const res = await fetch(`https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, {
+    const response = await fetch('https://texanwillsandtrusts.com/wp-json/mwai-ui/v1/chats/submit', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request_body)
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${BEARER_TOKEN}`,
+      },
+      body: JSON.stringify({
+        message: userMessage,
+        context: {},
+      }),
     });
 
-    const result = await res.json();
+    const data = await response.json();
 
-    if (res.ok) {
-      console.log('📤 Message sent successfully');
+    if (data?.text) {
+      await sendMessage(senderId, data.text);
     } else {
-      console.error('⚠️ Error sending message:', result);
+      console.error('Error: Invalid AI response', data);
+      await sendMessage(senderId, 'Sorry, I had trouble understanding that. Can you ask it a different way?');
     }
-  } catch (err) {
-    console.error('❌ Failed to call Send API:', err);
+  } catch (error) {
+    console.error('Error processing message:', error);
   }
 }
 
-// Start server
-const PORT = process.env.PORT || 10000;
+// 📤 Send Message Back to User
+async function sendMessage(senderId, replyText) {
+  try {
+    const url = `https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipient: { id: senderId },
+        message: { text: replyText },
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      console.error('Error sending message:', data);
+    }
+  } catch (error) {
+    console.error('Error sending message:', error);
+  }
+}
+
 app.listen(PORT, () => {
   console.log(`🚀 Texan Webhook running on port ${PORT}`);
 });
