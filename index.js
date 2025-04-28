@@ -57,12 +57,9 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-// 🔁 Determine Platform from Sender ID (rough heuristic)
-function getAccessToken(senderId) {
-  // Instagram sender IDs are longer
-  return senderId.length > 15
-    ? process.env.IG_PAGE_ACCESS_TOKEN
-    : process.env.FB_PAGE_ACCESS_TOKEN;
+// 🔁 Always use FB Page Access Token (for now)
+function getAccessToken() {
+  return process.env.FB_PAGE_ACCESS_TOKEN;
 }
 
 // 🤖 Send Message to AI Engine and Respond
@@ -94,9 +91,14 @@ async function handleMessage(senderId, userMessage) {
   }
 }
 
-// 📤 Send Reply to Messenger or Instagram
+// 📤 Send Reply to Messenger
 async function sendMessage(senderId, replyText) {
-  const accessToken = getAccessToken(senderId);
+  const accessToken = getAccessToken();
+  if (!accessToken) {
+    console.error('❌ Access token is missing!');
+    return;
+  }
+
   const url = `https://graph.facebook.com/v18.0/me/messages?access_token=${accessToken}`;
 
   try {
