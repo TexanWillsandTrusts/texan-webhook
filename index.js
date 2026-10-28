@@ -2,6 +2,7 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
+import { readSecrets, verifyMetaSignature } from './security.js';
 
 dotenv.config();
 
@@ -10,13 +11,27 @@ const PORT = process.env.PORT || 10000;
 
 // WordPress AI Engine API endpoint and bearer token
 const AI_ENDPOINT = 'https://texanwillsandtrusts.com/wp-json/mwai-ui/v1/chats/submit';
-const BEARER_TOKEN = 'TexWebhook2024';
+const { aiBearerToken: BEARER_TOKEN, verifyToken: VERIFY_TOKEN, appSecret: APP_SECRET } = readSecrets(process.env);
 
-app.use(bodyParser.json());
+// Verify Meta's signature against the exact bytes before parsing or side effects.
+app.use(bodyParser.json({
+  limit: '100kb',
+  verify(req, res, body) {
+    if (req.method === 'POST' &&
+        !verifyMetaSignature(body, req.headers['x-hub-signature-256'], APP_SECRET)) {
+      const error = new Error('Invalid webhook signature');
+      error.status = 403;
+      throw error;
+    }
+  },
+}));
+app.use((error, req, res, next) => {
+  if (error) return res.sendStatus(error.status === 403 ? 403 : 400);
+  next();
+});
 
 // 🔐 Webhook Verification (GET)
 app.get('/webhook', (req, res) => {
-  const VERIFY_TOKEN = 'texanverify123';
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
@@ -36,18 +51,20 @@ app.get('/webhook', (req, res) => {
 
 // 📥 Handle Incoming Messages (POST)
 app.post('/webhook', async (req, res) => {
+  // Unsupported/missing JSON content types never reach the JSON verifier.
+  if (!req.is('application/json')) return res.sendStatus(415);
   const body = req.body;
+  if (!body || !Array.isArray(body.entry)) return res.sendStatus(400);
 
   if (body.object === 'page') {
     for (const entry of body.entry) {
       const event = entry.messaging?.[0] || entry.standby?.[0];
       if (!event) continue;
 
-      const senderId = event.sender.id;
+      const senderId = event.sender?.id;
       const messageText = event.message?.text;
 
-      if (messageText) {
-        console.log(`📨 Tex received: "${messageText}" from ${senderId}`);
+      if (typeof senderId === 'string' && typeof messageText === 'string' && messageText) {
         await handleMessage(senderId, messageText);
       }
     }
@@ -82,11 +99,11 @@ async function handleMessage(senderId, userMessage) {
     if (data?.text) {
       await sendMessage(senderId, data.text);
     } else {
-      console.error('❌ Invalid AI response:', data);
+      console.error('Invalid AI response');
       await sendMessage(senderId, 'Lo siento, no entendí eso. ¿Podrías intentarlo de otra manera?');
     }
   } catch (error) {
-    console.error('❌ Error during AI request:', error);
+    console.error('AI request failed');
     await sendMessage(senderId, 'Oops, hubo un error al procesar tu mensaje.');
   }
 }
@@ -99,12 +116,12 @@ async function sendMessage(senderId, replyText) {
     return;
   }
 
-  const url = `https://graph.facebook.com/v18.0/me/messages?access_token=${accessToken}`;
+  const url = 'https://graph.facebook.com/v18.0/me/messages';
 
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({
         recipient: { id: senderId },
         message: { text: replyText },
@@ -113,10 +130,10 @@ async function sendMessage(senderId, replyText) {
 
     const data = await response.json();
     if (data.error) {
-      console.error('❌ Error sending message:', data);
+      console.error('Message delivery failed');
     }
   } catch (error) {
-    console.error('❌ Error posting to Graph API:', error);
+    console.error('Graph API request failed');
   }
 }
 
